@@ -94,7 +94,7 @@ The factory component keeps the attribute name (`title`); the plugin binds it to
 | `requiredAll()` | every language of the field (its own `locales()`) must be filled |
 | `requiredAny()` | at least one language; the error shows on the default language (with one language: plain `required()`) |
 | `locales(['uk', 'en'])` | this field only offers these languages |
-| `copyFromDefault(false)` | hide the "Copy from Українська" hint action (it asks before overwriting a filled language and does nothing while the default one is empty) |
+| `copyFromDefault(false)` | hide the "Copy from Українська" hint action (it asks before overwriting a filled language; with the default one empty it shows a "nothing to copy" notification instead) |
 | `emptyBadges()` | opt in to an "empty" badge on tabs of unfilled languages (off by default) |
 
 A tab whose input (or anything inside it, e.g. a repeater in a language tab) has a validation error gets a red `!` badge. Error messages name the language (`Title (English)`).
@@ -125,9 +125,11 @@ On a page without a model (settings in a table, a cache, a config file) the stat
 
 How it decides where the value comes from: whatever was passed to `fill()` wins. `EditRecord` and a `->relationship()`
 repeater fill the form from `attributesToArray()`, which already holds the whole map, so a change made in
-`mutateFormDataBeforeFill()` stays. Only when `{field}` did not arrive as an array are the languages read from
-`$record->getTranslation($field, $locale, false)` — and only when the field sits directly in the schema that was given
-that record. A JSON repeater/builder item, or a group with its own `statePath()`, is never read from the record — so an
+`mutateFormDataBeforeFill()` stays. Only when `{field}` did not arrive as an array — or when the form is filled with no
+data at all (a record Action's default mount, a custom page with `->record($record)` and `fill()`) — are the languages
+read from `$record->getTranslation($field, $locale, false)`, and only when the field sits directly in the schema that
+was given that record. The record is read **before** the language inputs hydrate, so their own `afterStateHydrated()`
+hooks receive the record's value. A JSON repeater/builder item, or a group with its own `statePath()`, is never read from the record — so an
 item field called `title` is never overwritten by the record's own `title`.
 
 ## Saving
@@ -169,7 +171,8 @@ admin only — `[en]` in a public `<title>` is an SEO bug. `searchAcrossLocales(
 case-insensitively — `ilike` on PostgreSQL, `lower(…) like lower(?)` on MySQL/MariaDB, plain `like` on SQLite (ASCII
 letters only); `team.name` searches through `whereHas('team')`. `sortableByLocale()` sorts by
 the shown text — the current language, then the default, then the rest — and works on the table's own attributes only
-(it throws for `team.name`).
+(it throws for `team.name`). A cleared language (stored by spatie as JSON `null`) neither matches a search nor sorts as
+the text `null`: on MySQL/MariaDB it is mapped to SQL `NULL` and falls through to the next language.
 
 ## Configuration
 
@@ -195,8 +198,8 @@ TranslatableFields::labels(['pl' => 'Polski']);
 - **Configure the languages.** Without `locales` in the config or `TranslatableFields::locales([...])`, the plugin offers
   `app.locale` + `app.fallback_locale` (spatie/laravel-translatable has no language list of its own) — on a fresh
   Laravel app that is a single `en` tab.
-- Your factory's own `afterStateHydrated()` is kept; when the plugin has to read the record (see above), it does so
-  after that hook.
+- Your factory's own `afterStateHydrated()` is kept and runs after the plugin has read the record (see above), so it
+  sees — and may change — the record's value for its language.
 - **Empty badges are opt-in** (`emptyBadges()` or `empty_badges => true`) because they make the inputs
   `live(onBlur: true)` — one request per blur, which adds up on large forms — unless your factory already chose `live()`.
 - **spatie hides `''`**: `getTranslations('title')` omits languages stored as an empty string; read the raw column, or

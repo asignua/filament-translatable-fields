@@ -70,15 +70,15 @@ class TranslatableColumn extends TextColumn
     public static function applyLocaleSearch(Builder $query, string $attribute, string $search): Builder
     {
         $driver = $query->getModel()->getConnection()->getDriverName();
-        $grammar = $query->getQuery()->getGrammar();
-        $column = $query->getModel()->qualifyColumn($attribute);
 
-        return $query->where(static function (Builder $query) use ($column, $search, $driver, $grammar): void {
+        return $query->where(static function (Builder $query) use ($attribute, $search, $driver): void {
             foreach (TranslatableFields::locales() as $locale) {
-                if (in_array($driver, ['mysql', 'mariadb'], true)) {
-                    // The identifier is quoted by the grammar; the search term is a binding.
-                    $query->orWhereRaw('lower('.$grammar->wrap("{$column}->{$locale}").') like lower(?)', ["%{$search}%"]); // @phpstan-ignore argument.type
+                if (self::isMysql($driver)) {
+                    // The search term is a binding; a cleared language (JSON null) is SQL NULL and never matches.
+                    $query->orWhereRaw('lower('.self::localeValueSql($query, $attribute, $locale).') like lower(?)', ["%{$search}%"]); // @phpstan-ignore argument.type
                 } else {
+                    $column = $query->getModel()->qualifyColumn($attribute);
+
                     $query->orWhere("{$column}->{$locale}", $driver === 'pgsql' ? 'ilike' : 'like', "%{$search}%");
                 }
             }
@@ -97,20 +97,58 @@ class TranslatableColumn extends TextColumn
             throw new LogicException("TranslatableColumn [{$name}]: sortableByLocale() cannot sort by a relationship attribute; sort with your own query (a join) instead.");
         }
 
-        $this->sortable(query: static function (Builder $query, string $direction) use ($name): Builder {
-            $grammar = $query->getQuery()->getGrammar();
-            $column = $query->getModel()->qualifyColumn($name);
-            // The very order the cell tries (the current language even when it is not configured); a value that is
-            // blank after trim() falls through, as it does in the cell.
-            $parts = array_map(static fn (string $locale): string => "nullif(trim({$grammar->wrap("{$column}->{$locale}")}), '')", TranslatableFields::fallbackOrder());
-            $expression = count($parts) === 1 ? $parts[0] : 'coalesce('.implode(', ', $parts).')';
-
-            // Identifiers are quoted by the grammar; the locales come from the developer's configuration.
-            $sql = $expression.' '.(strtolower($direction) === 'desc' ? 'desc' : 'asc');
-
-            return $query->orderByRaw($sql); // @phpstan-ignore argument.type
-        });
+        $this->sortable(query: static fn (Builder $query, string $direction): Builder => static::applyLocaleSort($query, $name, $direction));
 
         return $this;
+    }
+
+    /**
+     * @template TModel of Model
+     *
+     * @param Builder<TModel> $query
+     *
+     * @return Builder<TModel>
+     */
+    public static function applyLocaleSort(Builder $query, string $attribute, string $direction): Builder
+    {
+        // The very order the cell tries (the current language even when it is not configured); a value that is blank
+        // after trim() — or a cleared language stored as JSON null — falls through, as it does in the cell.
+        $parts = array_map(
+            static fn (string $locale): string => 'nullif(trim('.self::localeValueSql($query, $attribute, $locale).'), \'\')',
+            TranslatableFields::fallbackOrder(),
+        );
+        $expression = count($parts) === 1 ? $parts[0] : 'coalesce('.implode(', ', $parts).')';
+
+        return $query->orderByRaw($expression.' '.(strtolower($direction) === 'desc' ? 'desc' : 'asc')); // @phpstan-ignore argument.type
+    }
+
+    /**
+     * The text of one language as SQL, NULL when the language is absent or cleared. Spatie stores a cleared language
+     * as JSON `null`; PostgreSQL (`->>`) and SQLite (`json_extract`) turn it into SQL NULL, but MySQL/MariaDB's
+     * `json_unquote()` turns it into the four-letter string `'null'` — which would sort under "n" and match a search
+     * for "nu". There the JSON null is mapped to SQL NULL explicitly.
+     *
+     * Identifiers are quoted by the grammar; the locales come from the developer's configuration.
+     *
+     * @param Builder<covariant Model> $query
+     */
+    protected static function localeValueSql(Builder $query, string $attribute, string $locale): string
+    {
+        $grammar = $query->getQuery()->getGrammar();
+        $column = $query->getModel()->qualifyColumn($attribute);
+
+        if (!self::isMysql($query->getModel()->getConnection()->getDriverName())) {
+            return $grammar->wrap("{$column}->{$locale}");
+        }
+
+        $path = "'$.\"".str_replace(['\\', "'", '"'], ['\\\\', "''", '\\"'], $locale)."\"'";
+        $extract = 'json_extract('.$grammar->wrap($column).", {$path})";
+
+        return "(case when json_type({$extract}) = 'NULL' then null else json_unquote({$extract}) end)";
+    }
+
+    protected static function isMysql(string $driver): bool
+    {
+        return in_array($driver, ['mysql', 'mariadb'], true);
     }
 }

@@ -219,15 +219,34 @@ class ReviewFixesTest extends TestCase
             ->assertHasFormErrors(['name.fr' => 'required']);
     }
 
-    public function test_copy_is_disabled_while_the_default_language_is_empty(): void
+    public function test_copy_stays_clickable_while_the_default_language_is_empty(): void
     {
+        // The inputs are not live: a server-rendered `disabled` would outlive the editor typing the default language.
         $post = Post::create(['title' => ['en' => 'Hello'], 'body' => ['uk' => 'x']]);
         $action = TestAction::make('copyFromDefaultLocale')->schemaComponent('translatable-title-en.title.en');
 
         Livewire::test(EditPost::class, ['record' => $post->getKey()])
-            ->assertActionDisabled($action)
-            ->fillForm(['title.uk' => 'Привіт'])
             ->assertActionEnabled($action);
+    }
+
+    public function test_copy_with_an_empty_default_language_says_so(): void
+    {
+        $post = Post::create(['title' => ['de' => 'Hallo'], 'body' => ['uk' => 'x']]);
+
+        Livewire::test(EditPost::class, ['record' => $post->getKey()])
+            ->callAction(TestAction::make('copyFromDefaultLocale')->schemaComponent('translatable-title-en.title.en'))
+            ->assertNotified(__('filament-translatable-fields::translatable-fields.nothing_to_copy', ['language' => 'Українська']))
+            ->assertSchemaStateSet(['title' => ['uk' => null, 'en' => null, 'de' => 'Hallo']]);
+    }
+
+    public function test_copy_uses_the_default_language_typed_since_the_last_render(): void
+    {
+        $post = Post::create(['title' => ['de' => 'Hallo'], 'body' => ['uk' => 'x']]);
+
+        Livewire::test(EditPost::class, ['record' => $post->getKey()])
+            ->set('data.title.uk', 'Привіт')
+            ->callAction(TestAction::make('copyFromDefaultLocale')->schemaComponent('translatable-title-en.title.en'))
+            ->assertSchemaStateSet(['title' => ['uk' => 'Привіт', 'en' => 'Привіт', 'de' => 'Hallo']]);
     }
 
     public function test_search_is_case_insensitive_on_mysql(): void
@@ -236,7 +255,43 @@ class ReviewFixesTest extends TestCase
 
         TranslatableColumn::applyLocaleSearch($query, 'title', 'Hello');
 
-        $this->assertStringContainsString('lower(json_unquote(json_extract(`posts`.`title`, \'$."uk"\'))) like lower(?)', $query->toSql());
+        $this->assertStringContainsString('lower((case when json_type(json_extract(`posts`.`title`, \'$."uk"\')) = \'NULL\' then null else json_unquote(json_extract(`posts`.`title`, \'$."uk"\')) end)) like lower(?)', $query->toSql());
+    }
+
+    public function test_a_cleared_language_never_searches_as_the_string_null_on_mysql(): void
+    {
+        $query = Post::on('mysql')->newQuery();
+
+        TranslatableColumn::applyLocaleSearch($query, 'title', 'nu');
+
+        // json_unquote() of a JSON null is the string 'null'; a bare json_unquote() in the search would match "nu".
+        $this->assertDoesNotMatchRegularExpression('/(?<!else )json_unquote\(json_extract\(`posts`\.`title`, \'\$\."(uk|en|de)"\'\)\)\) like/', $query->toSql());
+        $this->assertSame(3, substr_count($query->toSql(), "= 'NULL' then null"));
+    }
+
+    public function test_a_cleared_language_falls_through_when_sorting_on_mysql(): void
+    {
+        $query = Post::on('mysql')->newQuery();
+
+        TranslatableColumn::applyLocaleSort($query, 'title', 'asc');
+
+        $sql = $query->toSql();
+        $this->assertStringContainsString('nullif(trim((case when json_type(json_extract(`posts`.`title`, \'$."uk"\')) = \'NULL\' then null else json_unquote(json_extract(`posts`.`title`, \'$."uk"\')) end)), \'\')', $sql);
+        $this->assertStringNotContainsString('nullif(trim(json_unquote(', $sql);
+        $this->assertStringEndsWith(' asc', $sql);
+    }
+
+    public function test_a_cleared_language_falls_through_when_sorting(): void
+    {
+        app()->setLocale('uk');
+
+        // Filament's default save stores a cleared language as JSON null.
+        $cleared = Post::create(['title' => ['uk' => null, 'en' => 'Я']]);
+        $plain = Post::create(['title' => ['uk' => 'Б']]);
+
+        Livewire::test(ListPosts::class)
+            ->sortTable('title')
+            ->assertCanSeeTableRecords([$plain, $cleared], inOrder: true);
     }
 
     public function test_sorting_skips_whitespace_and_tries_an_unconfigured_current_locale(): void

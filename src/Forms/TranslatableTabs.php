@@ -9,6 +9,7 @@ use Asignua\FilamentTranslatableFields\TranslatableFields;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Field;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -306,14 +307,21 @@ class TranslatableTabs extends Tabs
             ->icon('heroicon-o-clipboard-document')
             ->color('gray')
             ->link()
-            // Nothing to copy: say so instead of a click that silently does nothing.
-            ->disabled(static fn (Get $get): bool => Blank::is($get("{$field}.{$default}")))
-            // Never wipe a finished translation by a misclick.
+            // Never wipe a finished translation by a misclick. Evaluated when the action mounts, i.e. on the state the
+            // click has just sent, so it is never stale.
             ->requiresConfirmation(static fn (Get $get): bool => !Blank::is($get("{$field}.{$locale}")))
+            // No `disabled()` while the default language is empty: the attribute is rendered by the server, and the
+            // inputs are not live, so the link would stay disabled after the editor types the default language until
+            // some other request re-renders the form. The click itself carries the fresh state, so decide here.
             ->action(static function (Get $get, Set $set) use ($field, $locale, $default): void {
                 $value = $get("{$field}.{$default}");
 
-                if (Blank::is($value)) { // a guard: the action is disabled then
+                if (Blank::is($value)) {
+                    Notification::make()
+                        ->title(__('filament-translatable-fields::translatable-fields.nothing_to_copy', ['language' => TranslatableFields::label($default)]))
+                        ->warning()
+                        ->send();
+
                     return;
                 }
 
