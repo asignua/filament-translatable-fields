@@ -8,14 +8,15 @@ use Asignua\FilamentTranslatableFields\TranslatableFields;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * For Create/Edit pages (and relation managers, and custom pages that write a model by hand).
+ * Optional helper for Create/Edit pages (and relation managers, and custom pages that write a model by hand).
+ * Filament's default save already works with spatie — a cleared language arrives as `null` and spatie clears it —
+ * so the trait is NOT needed for correctness. What it adds:
  *
- * The form state of a translatable attribute is a map (`title => ['uk' => '…', 'en' => null]`). Before it reaches
- * the model every present language becomes a string: spatie MERGES the languages it is given into the stored
- * ones, so a cleared input must arrive as `''`, not `null`/missing, or the old text silently stays.
- *
- * Models that guard their attributes (`$guarded = ['*']`) cannot take the map through `fill()`: use
- * {@see fillTranslations()}, which calls `setTranslations()` and hands back the remaining data.
+ * - {@see fillTranslations()} for models that guard their attributes (`$guarded = ['*']`) and cannot take the map
+ *   through `fill()`; `forgetEmpty: true` drops a cleared language from the JSON instead of storing `''`;
+ * - `mutateFormDataBeforeCreate/Save()` that store a cleared language as `''` rather than `null` (tidiness only).
+ *   A page that defines its own `mutateFormDataBeforeSave()` replaces the trait's one: call
+ *   `$this->normalizeTranslatableData($data, $this->translatableModel())` there if you want the same.
  */
 trait HandlesTranslatableFields
 {

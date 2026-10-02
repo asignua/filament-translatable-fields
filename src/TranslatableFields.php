@@ -8,8 +8,10 @@ use Closure;
 use Locale;
 
 /**
- * The one place that knows which languages a site edits: the config, a call in a service provider
- * (`TranslatableFields::locales(['uk', 'en'])`) or spatie/laravel-translatable's own list.
+ * The one place that knows which languages a site edits: a call in a service provider
+ * (`TranslatableFields::locales(['uk', 'en'])`), the config, a `translatable.locales` key if the app defines one
+ * (spatie/laravel-translatable itself has no such key), and finally `app.locale` + `app.fallback_locale` — which on a
+ * fresh Laravel app is just `['en']`, i.e. one tab. Configure the list.
  */
 final class TranslatableFields
 {
@@ -88,7 +90,10 @@ final class TranslatableFields
         }
 
         if (class_exists(Locale::class)) {
-            $name = (string) Locale::getDisplayLanguage($locale, $locale);
+            // `pt_BR` and `pt_PT` must not both read "Português": with a region the label names it.
+            $name = (string) ((Locale::getRegion($locale) ?? '') !== ''
+                ? Locale::getDisplayName($locale, $locale)
+                : Locale::getDisplayLanguage($locale, $locale));
 
             if ($name !== '' && $name !== $locale) {
                 return mb_strtoupper(mb_substr($name, 0, 1)).mb_substr($name, 1);
@@ -113,9 +118,10 @@ final class TranslatableFields
     }
 
     /**
-     * Whole translation map for the fields of a state array: every present locale key is a string
-     * (`null` becomes `''`), so a cleared language is cleared and not silently kept by spatie's merge.
-     * A locale key that is absent stays absent (its input was hidden/disabled and must not be wiped).
+     * Whole translation map for the fields of a state array: every present locale key is a string (`null` becomes
+     * `''`), so the stored JSON holds strings only. spatie clears a language given `null` just as well — this is
+     * tidiness, not a correctness requirement. A locale key that is absent stays absent: spatie merges the languages
+     * it is given into the stored ones, so a hidden/disabled input keeps its stored text.
      *
      * @param array<string, mixed> $data
      * @param array<int, string>   $fields
@@ -148,6 +154,9 @@ final class TranslatableFields
     }
 
     /**
+     * An app-defined `translatable.locales` (spatie ships no such key; some apps add it), else the app locale and its
+     * fallback.
+     *
      * @return array<int, string>
      */
     private static function spatieLocales(): array

@@ -85,6 +85,12 @@ class SupportTest extends TestCase
         $this->assertSame('EN (code)', TranslatableFields::label('en'));
     }
 
+    public function test_regional_variants_get_distinct_labels(): void
+    {
+        $this->assertNotSame(TranslatableFields::label('pt_BR'), TranslatableFields::label('pt_PT'));
+        $this->assertSame('Português', TranslatableFields::label('pt'));
+    }
+
     public function test_normalize_turns_null_into_empty_strings_but_leaves_absent_languages_alone(): void
     {
         $data = TranslatableFields::normalize(['title' => ['uk' => 'T', 'en' => null], 'other' => ['en' => null]], ['title', 'missing']);
