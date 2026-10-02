@@ -1,0 +1,63 @@
+{
+    "name": "asignua/filament-translatable-fields",
+    "description": "Per-field locale tabs for spatie/laravel-translatable in Filament 5: every language lives in the form state at once, so Repeater, Builder, relationship repeaters and settings pages keep their translations.",
+    "keywords": ["filament", "filament-plugin", "laravel", "translatable", "spatie", "multilingual", "i18n", "repeater"],
+    "homepage": "https://github.com/asignua/filament-translatable-fields",
+    "support": {
+        "issues": "https://github.com/asignua/filament-translatable-fields/issues",
+        "source": "https://github.com/asignua/filament-translatable-fields"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Mykhailo Hladchenko",
+            "email": "myhailo@hotmail.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "filament/filament": "^5.0",
+        "illuminate/contracts": "^12.0|^13.0",
+        "spatie/laravel-package-tools": "^1.16",
+        "spatie/laravel-translatable": "^6.11"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "orchestra/testbench": "^10.0|^11.0",
+        "phpunit/phpunit": "^11.5|^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Asignua\\FilamentTranslatableFields\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Asignua\\FilamentTranslatableFields\\Tests\\": "tests/",
+            "Workbench\\App\\": "workbench/app/",
+            "Workbench\\Database\\Factories\\": "workbench/database/factories/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=1G",
+        "format": "vendor/bin/pint"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Asignua\\FilamentTranslatableFields\\TranslatableFieldsServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": false
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

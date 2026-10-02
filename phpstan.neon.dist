@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - src
+    tmpDir: build/phpstan
+    checkOctaneCompatibility: true
+    ignoreErrors:
+        # A trait for the host's pages: the package itself never uses it.
+        -
+            identifier: trait.unused
+            path: src/Concerns/HandlesTranslatableFields.php
