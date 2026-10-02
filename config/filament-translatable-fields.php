@@ -5,9 +5,10 @@ declare(strict_types=1);
 return [
 
     /*
-    | The languages every translatable field offers, in tab order. `null` falls back to
-    | spatie/laravel-translatable's `translatable.locales`, then to the app locale and its
-    | fallback. `TranslatableFields::locales([...])` (e.g. in a service provider) overrides this.
+    | The languages every translatable field offers, in tab order. `null` falls back to a
+    | `translatable.locales` key IF your app defines one (spatie/laravel-translatable ships no such
+    | key), then to app.locale + app.fallback_locale — just ['en'] on a fresh Laravel app, i.e. ONE
+    | tab. Set this. `TranslatableFields::locales([...])` (e.g. in a service provider) overrides it.
     */
     'locales' => null,
 

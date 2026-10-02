@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/packagist/l/asignua/filament-translatable-fields.svg?style=flat-square)](https://github.com/asignua/filament-translatable-fields/blob/main/LICENSE.md)
 [![Plumb score](https://plumbphp.dev/badges/asignua/filament-translatable-fields/composite.svg)](https://plumbphp.dev/asignua/filament-translatable-fields)
 
-<img class="filament-hidden" src="https://raw.githubusercontent.com/asignua/filament-translatable-fields/v1.0.0/art/cover.jpg" alt="Filament Translatable Fields">
+<img class="filament-hidden" src="https://raw.githubusercontent.com/asignua/filament-translatable-fields/main/art/cover.jpg" alt="Filament Translatable Fields">
 
 Per-field language tabs for [spatie/laravel-translatable](https://github.com/spatie/laravel-translatable) in
 [Filament](https://filamentphp.com) 5. Every language is a real input in the form state at the same time, so
@@ -34,9 +34,9 @@ each translatable field carries its own tabs and its own `title.uk` / `title.en`
 
 ## Screenshots
 
-![Language tabs on a field, with copy from the default language](https://raw.githubusercontent.com/asignua/filament-translatable-fields/v1.0.0/art/tabs.jpg)
+![Language tabs on a field, with copy from the default language](https://raw.githubusercontent.com/asignua/filament-translatable-fields/main/art/tabs.jpg)
 
-![A Repeater with translatable fields and "empty" badges](https://raw.githubusercontent.com/asignua/filament-translatable-fields/v1.0.0/art/repeater.jpg)
+![A Repeater with translatable fields and "empty" badges](https://raw.githubusercontent.com/asignua/filament-translatable-fields/main/art/repeater.jpg)
 
 ## Requirements
 
@@ -89,15 +89,15 @@ The factory component keeps the attribute name (`title`); the plugin binds it to
 
 | Method | Effect |
 | --- | --- |
-| `requiredDefault()` | the default language must be filled |
+| `requiredDefault()` | the default language must be filled (the field's first language when its `locales()` leave the global default out) |
 | `requiredIn(['uk', 'en'])` | those languages must be filled |
 | `requiredAll()` | every language must be filled |
-| `requiredAny()` | at least one language; the error shows on the default language |
+| `requiredAny()` | at least one language; the error shows on the default language (with one language: plain `required()`) |
 | `locales(['uk', 'en'])` | this field only offers these languages |
-| `copyFromDefault(false)` | hide the "Copy from Українська" hint action |
+| `copyFromDefault(false)` | hide the "Copy from Українська" hint action (it asks before overwriting a filled language and does nothing while the default one is empty) |
 | `emptyBadges()` | opt in to an "empty" badge on tabs of unfilled languages (off by default) |
 
-A tab whose input has a validation error gets a red `!` badge. Error messages name the language (`Title (English)`).
+A tab whose input (or anything inside it, e.g. a repeater in a language tab) has a validation error gets a red `!` badge. Error messages name the language (`Title (English)`).
 
 ## Repeaters, builders, relationships, settings pages
 
@@ -123,15 +123,18 @@ Repeater::make('sections')->relationship()->orderColumn('sort')->schema([
 On a page without a model (settings in a table, a cache, a config file) the state is simply an array:
 `->fill(['site_name' => ['uk' => '…', 'en' => '…']])` and `$this->form->getState()` returns the same shape.
 
-How it decides where the value comes from: the language input is filled from `$record->getTranslation($field, $locale, false)`
-only when the field sits directly in the schema that was given that record (the resource form, or an item of a
-`->relationship()` repeater). A JSON repeater/builder item, or a group with its own `statePath()`, already holds the
-array and is left alone — so an item field called `title` is never overwritten by the record's own `title`.
+How it decides where the value comes from: whatever was passed to `fill()` wins. `EditRecord` and a `->relationship()`
+repeater fill the form from `attributesToArray()`, which already holds the whole map, so a change made in
+`mutateFormDataBeforeFill()` stays. Only when `{field}` did not arrive as an array are the languages read from
+`$record->getTranslation($field, $locale, false)` — and only when the field sits directly in the schema that was given
+that record. A JSON repeater/builder item, or a group with its own `statePath()`, is never read from the record — so an
+item field called `title` is never overwritten by the record's own `title`.
 
 ## Saving
 
 Filament's default save already works with spatie: `$model->fill(['title' => ['uk' => 'a', 'en' => 'b']])` calls
-`setTranslations()`. Two details are handled by the optional page trait:
+`setTranslations()`, and a cleared language (`'en' => null`) is cleared. You do not need anything else for a normal
+model. The optional page trait is a helper for the rest:
 
 ```php
 use Asignua\FilamentTranslatableFields\Concerns\HandlesTranslatableFields;
@@ -142,12 +145,13 @@ class EditPost extends EditRecord
 }
 ```
 
-- It turns `null` languages into `''` before the model sees them. spatie merges the languages it is given into the
-  stored ones, so a cleared language must be *present and empty* or the old text stays. A locale key that is absent
-  (a hidden or disabled input) is left untouched.
 - `fillTranslations($record, $data, forgetEmpty: false)` writes the maps with `setTranslation()` and returns the rest of
   `$data` — for models with `$guarded = ['*']` where `fill()` writes nothing. `forgetEmpty: true` removes cleared
   languages from the JSON instead of storing `''`.
+- Its `mutateFormDataBeforeCreate/Save()` store a cleared language as `''` instead of `null` (tidiness, not
+  correctness). A locale key that is absent (a hidden or disabled input) is left untouched — spatie merges the
+  languages it is given into the stored ones. A page that defines its own `mutateFormDataBeforeSave()` replaces the
+  trait's: call `$this->normalizeTranslatableData($data, $this->translatableModel())` there if you want it.
 
 For the same normalisation outside a page: `TranslatableFields::normalize($data, ['title', 'body'])`.
 
@@ -162,12 +166,15 @@ TranslatableEntry::make('title'),
 The value of the current language; if it is empty, the default language, then any filled one, prefixed with a marker
 (`[en] Hello`) so an editor can tell a borrowed text from a translated one. Nothing is written back. Use them in the
 admin only — `[en]` in a public `<title>` is an SEO bug. `searchAcrossLocales()` searches `title->uk`, `title->en`, …
+(case-insensitively on PostgreSQL too; `team.name` searches through `whereHas('team')`). `sortableByLocale()` sorts by
+the shown text — the current language, then the default, then the rest — and works on the table's own attributes only
+(it throws for `team.name`).
 
 ## Configuration
 
 ```php
 // config/filament-translatable-fields.php
-'locales' => null,         // null → spatie's translatable.locales → [app.locale, app.fallback_locale]
+'locales' => null,         // null → your app's translatable.locales, if defined → [app.locale, app.fallback_locale]
 'default_locale' => null,  // null → app.locale (or the first language)
 'labels' => [],            // ['uk' => 'Українська']; default: the language's own name (intl) or the code
 'marker' => '[:locale] ',  // '' disables the marker
@@ -184,8 +191,11 @@ TranslatableFields::labels(['pl' => 'Polski']);
 
 ## Gotchas
 
-- **Do not set `afterStateHydrated()` on the field your factory returns** — the plugin uses that hook to read the record
-  and a second one would replace it. Use `afterStateUpdated()` / `dehydrateStateUsing()` freely.
+- **Configure the languages.** Without `locales` in the config or `TranslatableFields::locales([...])`, the plugin offers
+  `app.locale` + `app.fallback_locale` (spatie/laravel-translatable has no language list of its own) — on a fresh
+  Laravel app that is a single `en` tab.
+- Your factory's own `afterStateHydrated()` is kept; when the plugin has to read the record (see above), it does so
+  after that hook.
 - **Empty badges are opt-in** (`emptyBadges()` or `empty_badges => true`) because they make the inputs
   `live(onBlur: true)` — one request per blur, which adds up on large forms — unless your factory already chose `live()`.
 - **spatie hides `''`**: `getTranslations('title')` omits languages stored as an empty string; read the raw column, or
