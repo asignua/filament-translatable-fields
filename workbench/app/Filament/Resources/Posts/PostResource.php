@@ -8,6 +8,7 @@ use Asignua\FilamentTranslatableFields\Forms\Translatable;
 use Asignua\FilamentTranslatableFields\Forms\TranslatableTabs;
 use Asignua\FilamentTranslatableFields\Infolists\TranslatableEntry;
 use Asignua\FilamentTranslatableFields\Tables\TranslatableColumn;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
@@ -76,6 +77,14 @@ class PostResource extends Resource
             TextColumn::make('id')->alignEnd(),
             TranslatableColumn::make('title')->searchAcrossLocales()->sortableByLocale(),
             TranslatableColumn::make('body')->marker(false),
+        ])->recordActions([
+            // A plain record action: Filament mounts it with `$schema->fill()` and no data.
+            Action::make('translate')
+                ->schema([Translatable::field(TextInput::make('title'))])
+                ->action(static function (Post $record, array $data): void {
+                    $record->replaceTranslations('title', array_filter($data['title'], static fn (mixed $v): bool => filled($v)));
+                    $record->save();
+                }),
         ]);
     }
 

@@ -91,7 +91,7 @@ The factory component keeps the attribute name (`title`); the plugin binds it to
 | --- | --- |
 | `requiredDefault()` | the default language must be filled (the field's first language when its `locales()` leave the global default out) |
 | `requiredIn(['uk', 'en'])` | those languages must be filled |
-| `requiredAll()` | every language must be filled |
+| `requiredAll()` | every language of the field (its own `locales()`) must be filled |
 | `requiredAny()` | at least one language; the error shows on the default language (with one language: plain `required()`) |
 | `locales(['uk', 'en'])` | this field only offers these languages |
 | `copyFromDefault(false)` | hide the "Copy from Українська" hint action (it asks before overwriting a filled language and does nothing while the default one is empty) |
@@ -166,7 +166,8 @@ TranslatableEntry::make('title'),
 The value of the current language; if it is empty, the default language, then any filled one, prefixed with a marker
 (`[en] Hello`) so an editor can tell a borrowed text from a translated one. Nothing is written back. Use them in the
 admin only — `[en]` in a public `<title>` is an SEO bug. `searchAcrossLocales()` searches `title->uk`, `title->en`, …
-(case-insensitively on PostgreSQL too; `team.name` searches through `whereHas('team')`). `sortableByLocale()` sorts by
+case-insensitively — `ilike` on PostgreSQL, `lower(…) like lower(?)` on MySQL/MariaDB, plain `like` on SQLite (ASCII
+letters only); `team.name` searches through `whereHas('team')`. `sortableByLocale()` sorts by
 the shown text — the current language, then the default, then the rest — and works on the table's own attributes only
 (it throws for `team.name`).
 

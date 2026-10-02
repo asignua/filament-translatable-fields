@@ -7,6 +7,7 @@ namespace Asignua\FilamentTranslatableFields\Tests\Feature;
 use Asignua\FilamentTranslatableFields\Forms\TranslatableTabs;
 use Asignua\FilamentTranslatableFields\Tables\TranslatableColumn;
 use Asignua\FilamentTranslatableFields\Tests\Fixtures\EditPostWithFillHook;
+use Asignua\FilamentTranslatableFields\Tests\Fixtures\RecordSchemaHarness;
 use Asignua\FilamentTranslatableFields\Tests\Fixtures\SchemaHarness;
 use Asignua\FilamentTranslatableFields\Tests\TestCase;
 use Filament\Actions\Testing\TestAction;
@@ -167,5 +168,87 @@ class ReviewFixesTest extends TestCase
         $column->applySearchConstraint($query, 'Needle', $isFirst);
 
         $this->assertSame([$hit->getKey()], $query->pluck('id')->all());
+    }
+
+    public function test_a_record_bound_form_filled_without_data_reads_the_record(): void
+    {
+        $post = Post::create(['title' => ['uk' => 'Привіт', 'en' => 'Hello']]);
+        SchemaHarness::$components = static fn (): array => [
+            TranslatableTabs::make('title', fn () => TextInput::make('title')),
+        ];
+
+        Livewire::test(RecordSchemaHarness::class, ['post' => $post])
+            ->assertSchemaStateSet(['title' => ['uk' => 'Привіт', 'en' => 'Hello', 'de' => null]]);
+    }
+
+    public function test_the_input_hooks_see_the_record_value(): void
+    {
+        $post = Post::create(['title' => ['uk' => 'Привіт', 'en' => 'Hello']]);
+        SchemaHarness::$components = static fn (): array => [
+            TranslatableTabs::make('title', fn () => TextInput::make('title')->afterStateHydrated(fn (TextInput $component, ?string $state) => $component->state($state === null ? null : mb_strtoupper($state)))),
+        ];
+
+        Livewire::test(RecordSchemaHarness::class, ['post' => $post])
+            ->assertSchemaStateSet(['title' => ['uk' => 'ПРИВІТ', 'en' => 'HELLO', 'de' => null]]);
+    }
+
+    public function test_a_table_record_action_opens_with_the_record_translations_and_keeps_them(): void
+    {
+        $post = Post::create(['title' => ['uk' => 'Привіт', 'en' => 'Hello']]);
+        $action = TestAction::make('translate')->table($post);
+
+        Livewire::test(ListPosts::class)
+            ->mountAction($action)
+            ->assertActionDataSet(['title' => ['uk' => 'Привіт', 'en' => 'Hello', 'de' => null]])
+            ->fillForm(['title.de' => 'Hallo'])
+            ->callMountedAction()
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(['uk' => 'Привіт', 'en' => 'Hello', 'de' => 'Hallo'], $post->refresh()->getTranslations('title'));
+    }
+
+    public function test_required_all_follows_the_field_locales(): void
+    {
+        SchemaHarness::$components = static fn (): array => [
+            TranslatableTabs::make('name', fn () => TextInput::make('name'))->locales(['uk', 'fr'])->requiredAll(),
+        ];
+
+        Livewire::test(SchemaHarness::class)
+            ->fillForm(['name' => ['uk' => 'Так', 'fr' => '']])
+            ->call('save')
+            ->assertHasFormErrors(['name.fr' => 'required']);
+    }
+
+    public function test_copy_is_disabled_while_the_default_language_is_empty(): void
+    {
+        $post = Post::create(['title' => ['en' => 'Hello'], 'body' => ['uk' => 'x']]);
+        $action = TestAction::make('copyFromDefaultLocale')->schemaComponent('translatable-title-en.title.en');
+
+        Livewire::test(EditPost::class, ['record' => $post->getKey()])
+            ->assertActionDisabled($action)
+            ->fillForm(['title.uk' => 'Привіт'])
+            ->assertActionEnabled($action);
+    }
+
+    public function test_search_is_case_insensitive_on_mysql(): void
+    {
+        $query = Post::on('mysql')->newQuery();
+
+        TranslatableColumn::applyLocaleSearch($query, 'title', 'Hello');
+
+        $this->assertStringContainsString('lower(json_unquote(json_extract(`posts`.`title`, \'$."uk"\'))) like lower(?)', $query->toSql());
+    }
+
+    public function test_sorting_skips_whitespace_and_tries_an_unconfigured_current_locale(): void
+    {
+        app()->setLocale('pl');
+
+        $blank = Post::create(['title' => ['pl' => '   ', 'uk' => 'Я']]);
+        $polish = Post::create(['title' => ['pl' => 'A', 'uk' => 'Ю']]);
+        $plain = Post::create(['title' => ['uk' => 'Б']]);
+
+        Livewire::test(ListPosts::class)
+            ->sortTable('title')
+            ->assertCanSeeTableRecords([$polish, $plain, $blank], inOrder: true);
     }
 }

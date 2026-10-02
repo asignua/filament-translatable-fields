@@ -17,6 +17,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Livewire\Component as Livewire;
@@ -48,6 +49,8 @@ class TranslatableTabs extends Tabs
     protected array|Closure $requiredLocales = [];
 
     protected bool $isRequiredDefault = false;
+
+    protected bool $isRequiredAll = false;
 
     protected bool|Closure $isRequiredAny = false;
 
@@ -103,6 +106,7 @@ class TranslatableTabs extends Tabs
     {
         $this->requiredLocales = $locales;
         $this->isRequiredDefault = false;
+        $this->isRequiredAll = false;
 
         return $this;
     }
@@ -115,13 +119,21 @@ class TranslatableTabs extends Tabs
     {
         $this->requiredLocales = [];
         $this->isRequiredDefault = true;
+        $this->isRequiredAll = false;
 
         return $this;
     }
 
+    /**
+     * Every language of THIS field must be filled — its own {@see locales()}, not only the global list.
+     */
     public function requiredAll(): static
     {
-        return $this->requiredIn(static fn (): array => TranslatableFields::locales());
+        $this->requiredLocales = [];
+        $this->isRequiredDefault = false;
+        $this->isRequiredAll = true;
+
+        return $this;
     }
 
     /**
@@ -179,6 +191,10 @@ class TranslatableTabs extends Tabs
 
         if ($this->isRequiredDefault) {
             $required[] = $default;
+        }
+
+        if ($this->isRequiredAll) {
+            $required = $locales;
         }
 
         $requiredAny = (bool) $this->evaluate($this->isRequiredAny);
@@ -290,12 +306,14 @@ class TranslatableTabs extends Tabs
             ->icon('heroicon-o-clipboard-document')
             ->color('gray')
             ->link()
+            // Nothing to copy: say so instead of a click that silently does nothing.
+            ->disabled(static fn (Get $get): bool => Blank::is($get("{$field}.{$default}")))
             // Never wipe a finished translation by a misclick.
             ->requiresConfirmation(static fn (Get $get): bool => !Blank::is($get("{$field}.{$locale}")))
             ->action(static function (Get $get, Set $set) use ($field, $locale, $default): void {
                 $value = $get("{$field}.{$default}");
 
-                if (Blank::is($value)) {
+                if (Blank::is($value)) { // a guard: the action is disabled then
                     return;
                 }
 
@@ -304,24 +322,33 @@ class TranslatableTabs extends Tabs
     }
 
     /**
-     * Fill the language inputs from the record when the state did not arrive as a translation map.
+     * Put the record's translation map into the state BEFORE the language inputs hydrate, so their own
+     * `afterStateHydrated()` hooks (a Repeater, a multiple Select, a FileUpload in a language tab) see the record value.
      *
-     * Normally it does: `EditRecord` and a `->relationship()` repeater fill the form from `attributesToArray()`, which
-     * spatie turns into the whole map, and whatever the page changed in `mutateFormDataBeforeFill()` (or passed to
-     * `$form->fill()` itself) must stay. Only when `{field}` is not an array (absent, a raw JSON string) are the
-     * languages read from `$record->getTranslation($field, $locale, false)` — and only when the field really belongs
-     * to the record's schema: inside a JSON Repeater/Builder item (or a statePath-ed group) nothing is read.
+     * - `fill($data)` (`EditRecord`, a `->relationship()` repeater): the data wins whenever `{field}` arrived as a map —
+     *   whatever the page changed in `mutateFormDataBeforeFill()` must stay. Only an absent or non-array `{field}`
+     *   (a raw JSON string) is replaced by the record's languages.
+     * - `fill()` without data (a record Action's default mount, a custom page with `->record($r)`): the children would
+     *   write `null` into every language, so the record's map is written first and marked as hydrated — unless the
+     *   field already got a value from a parent's default.
      *
-     * Runs once for the whole field, after the inputs' own `afterStateHydrated()` hooks, before the tabs' one.
+     * Only when the field really belongs to the record's schema: inside a JSON Repeater/Builder item (or a
+     * statePath-ed group) nothing is read.
+     *
+     * @param array<string, mixed>|null $hydratedDefaultState
+     * @param array<string, true>       $appliedStateCastPaths
      */
-    public function callAfterStateHydrated(): static
+    public function hydrateState(?array &$hydratedDefaultState, bool $shouldCallHydrationHooks = true, bool $shouldApplyStateCasts = true, array &$appliedStateCastPaths = []): void
     {
-        $this->hydrateFromRecord();
+        $this->hydrateFromRecord($hydratedDefaultState);
 
-        return parent::callAfterStateHydrated();
+        parent::hydrateState($hydratedDefaultState, $shouldCallHydrationHooks, $shouldApplyStateCasts, $appliedStateCastPaths);
     }
 
-    protected function hydrateFromRecord(): void
+    /**
+     * @param array<string, mixed>|null $hydratedDefaultState
+     */
+    protected function hydrateFromRecord(?array &$hydratedDefaultState): void
     {
         $record = self::recordFor($this, $this->field);
 
@@ -330,35 +357,23 @@ class TranslatableTabs extends Tabs
         }
 
         $path = implode('.', array_filter([$this->getContainer()->getStatePath(), $this->field], static fn (?string $s): bool => (string) $s !== ''));
+        $livewire = $this->getLivewire();
 
-        if (is_array(data_get($this->getLivewire(), $path))) {
+        if ($hydratedDefaultState === null ? is_array(data_get($livewire, $path)) : Arr::has($hydratedDefaultState, $path)) {
             return;
         }
 
-        foreach ($this->getChildSchemas(withHidden: true) as $tabs) {
-            foreach ($tabs->getComponents(withActions: false, withHidden: true) as $tab) {
-                if (!$tab instanceof Component) {
-                    continue;
-                }
+        $map = [];
 
-                foreach ($tab->getChildSchemas(withHidden: true) as $schema) {
-                    foreach ($schema->getComponents(withActions: false, withHidden: true) as $component) {
-                        if (!$component instanceof Field) {
-                            continue;
-                        }
+        foreach ($this->getLocales() as $locale) {
+            $value = $record->getTranslation($this->field, $locale, false); // @phpstan-ignore method.notFound
+            $map[$locale] = Blank::is($value) ? null : $value;
+        }
 
-                        $statePath = (string) $component->getStatePath();
+        data_set($livewire, $path, $map);
 
-                        if (!str_starts_with($statePath, $path.'.')) {
-                            continue;
-                        }
-
-                        $value = $record->getTranslation($this->field, substr($statePath, strlen($path) + 1), false); // @phpstan-ignore method.notFound
-
-                        $component->state(Blank::is($value) ? null : $value);
-                    }
-                }
-            }
+        if ($hydratedDefaultState !== null) {
+            Arr::set($hydratedDefaultState, $path, $map); // @phpstan-ignore parameterByRef.type
         }
     }
 

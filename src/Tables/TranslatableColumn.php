@@ -39,8 +39,10 @@ class TranslatableColumn extends TextColumn
     }
 
     /**
-     * Search the JSON of every language (`title->uk`, `title->en`, …), case-insensitively on PostgreSQL too. A dotted
-     * name (`team.name`) searches the related model through `whereHas()`.
+     * Search the JSON of every language (`title->uk`, `title->en`, …) case-insensitively: `ilike` on PostgreSQL,
+     * `lower(…) like lower(?)` on MySQL/MariaDB (MySQL 8 returns a JSON value as a binary-collated string, so a plain
+     * `like` is case-sensitive there), a plain `like` on SQLite (ASCII only). A dotted name (`team.name`) searches the
+     * related model through `whereHas()`.
      */
     public function searchAcrossLocales(): static
     {
@@ -50,20 +52,37 @@ class TranslatableColumn extends TextColumn
             $relation = str_contains($name, '.') ? Str::beforeLast($name, '.') : null;
             $attribute = Str::afterLast($name, '.');
 
-            $match = static function (Builder $query) use ($attribute, $search): void {
-                $operator = $query->getModel()->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
-
-                $query->where(static function (Builder $query) use ($attribute, $search, $operator): void {
-                    foreach (TranslatableFields::locales() as $locale) {
-                        $query->orWhere("{$attribute}->{$locale}", $operator, "%{$search}%");
-                    }
-                });
-            };
+            $match = static fn (Builder $query): Builder => static::applyLocaleSearch($query, $attribute, $search);
 
             return $relation === null ? $query->where($match) : $query->whereHas($relation, $match);
         });
 
         return $this;
+    }
+
+    /**
+     * @template TModel of Model
+     *
+     * @param Builder<TModel> $query
+     *
+     * @return Builder<TModel>
+     */
+    public static function applyLocaleSearch(Builder $query, string $attribute, string $search): Builder
+    {
+        $driver = $query->getModel()->getConnection()->getDriverName();
+        $grammar = $query->getQuery()->getGrammar();
+        $column = $query->getModel()->qualifyColumn($attribute);
+
+        return $query->where(static function (Builder $query) use ($column, $search, $driver, $grammar): void {
+            foreach (TranslatableFields::locales() as $locale) {
+                if (in_array($driver, ['mysql', 'mariadb'], true)) {
+                    // The identifier is quoted by the grammar; the search term is a binding.
+                    $query->orWhereRaw('lower('.$grammar->wrap("{$column}->{$locale}").') like lower(?)', ["%{$search}%"]); // @phpstan-ignore argument.type
+                } else {
+                    $query->orWhere("{$column}->{$locale}", $driver === 'pgsql' ? 'ilike' : 'like', "%{$search}%");
+                }
+            }
+        });
     }
 
     /**
@@ -80,8 +99,10 @@ class TranslatableColumn extends TextColumn
 
         $this->sortable(query: static function (Builder $query, string $direction) use ($name): Builder {
             $grammar = $query->getQuery()->getGrammar();
-            $locales = array_values(array_intersect(TranslatableFields::fallbackOrder(), TranslatableFields::locales()));
-            $parts = array_map(static fn (string $locale): string => "nullif({$grammar->wrap("{$name}->{$locale}")}, '')", $locales);
+            $column = $query->getModel()->qualifyColumn($name);
+            // The very order the cell tries (the current language even when it is not configured); a value that is
+            // blank after trim() falls through, as it does in the cell.
+            $parts = array_map(static fn (string $locale): string => "nullif(trim({$grammar->wrap("{$column}->{$locale}")}), '')", TranslatableFields::fallbackOrder());
             $expression = count($parts) === 1 ? $parts[0] : 'coalesce('.implode(', ', $parts).')';
 
             // Identifiers are quoted by the grammar; the locales come from the developer's configuration.
