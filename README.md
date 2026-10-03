@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/packagist/l/asignua/filament-translatable-fields.svg?style=flat-square)](https://github.com/asignua/filament-translatable-fields/blob/main/LICENSE.md)
 [![Plumb score](https://plumbphp.dev/badges/asignua/filament-translatable-fields/composite.svg)](https://plumbphp.dev/asignua/filament-translatable-fields)
 
-<img class="filament-hidden" src="https://raw.githubusercontent.com/asignua/filament-translatable-fields/main/art/cover.jpg" alt="Filament Translatable Fields">
+<img class="filament-hidden" src="https://raw.githubusercontent.com/asignua/filament-translatable-fields/v1.0.0/art/cover.jpg" alt="Filament Translatable Fields">
 
 Per-field language tabs for [spatie/laravel-translatable](https://github.com/spatie/laravel-translatable) in
 [Filament](https://filamentphp.com) 5. Every language is a real input in the form state at the same time, so
@@ -34,9 +34,9 @@ each translatable field carries its own tabs and its own `title.uk` / `title.en`
 
 ## Screenshots
 
-![Language tabs on a field, with copy from the default language](https://raw.githubusercontent.com/asignua/filament-translatable-fields/main/art/tabs.jpg)
+![Language tabs on a field, with copy from the default language](https://raw.githubusercontent.com/asignua/filament-translatable-fields/v1.0.0/art/tabs.jpg)
 
-![A Repeater with translatable fields and "empty" badges](https://raw.githubusercontent.com/asignua/filament-translatable-fields/main/art/repeater.jpg)
+![A Repeater with translatable fields and "empty" badges](https://raw.githubusercontent.com/asignua/filament-translatable-fields/v1.0.0/art/repeater.jpg)
 
 ## Requirements
 

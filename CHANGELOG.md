@@ -2,7 +2,7 @@
 
 All notable changes to `asignua/filament-translatable-fields` are documented here.
 
-## v1.0.0 - unreleased
+## v1.0.0 - 2026-10-03
 
 - `TranslatableTabs::make('title', fn (string $locale) => TextInput::make('title'))` and `Translatable::field(TextInput::make('title'))`: one tab per language around a field, one input per language bound to `title.{locale}`; the whole translation map is in the form state at once.
 - Works in a JSON `Repeater`/`Builder`, a `->relationship()` repeater, a resource page and a model-less settings page.
