@@ -16,8 +16,20 @@ final class Blank
         }
 
         if (is_string($value)) {
-            // Rich HTML: empty paragraphs are empty, but an image or a table is content.
-            return trim(strip_tags($value)) === '' && preg_match('/<(img|iframe|video|audio|hr|table|svg|figure)\b/i', $value) !== 1;
+            if (trim($value) === '') {
+                return true;
+            }
+
+            // Plain text: `<3` or `a < b` is not markup, so strip_tags() must not judge it.
+            if (preg_match('/<[a-z!\/]/i', $value) !== 1) {
+                return false;
+            }
+
+            // Rich HTML: empty paragraphs are empty, but an image, a table or a node such as a custom block or a
+            // merge tag (serialised as an empty element with `data-type`) is content.
+            return trim(strip_tags($value)) === ''
+                && preg_match('/<(img|iframe|video|audio|hr|table|svg|figure)\b/i', $value) !== 1
+                && preg_match('/<[a-z][^>]*\sdata-type\s*=/i', $value) !== 1;
         }
 
         if (is_array($value)) {

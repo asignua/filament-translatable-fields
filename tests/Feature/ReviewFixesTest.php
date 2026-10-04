@@ -181,6 +181,18 @@ class ReviewFixesTest extends TestCase
             ->assertSchemaStateSet(['title' => ['uk' => 'Привіт', 'en' => 'Hello', 'de' => null]]);
     }
 
+    public function test_a_record_bound_form_filled_without_data_keeps_values_that_look_blank_as_html(): void
+    {
+        $block = '<div data-type="customBlock" data-config="{}" data-id="video"></div>';
+        $post = Post::create(['title' => ['uk' => '<3', 'en' => $block, 'de' => '<p></p>']]);
+        SchemaHarness::$components = static fn (): array => [
+            TranslatableTabs::make('title', fn () => TextInput::make('title')),
+        ];
+
+        Livewire::test(RecordSchemaHarness::class, ['post' => $post])
+            ->assertSchemaStateSet(['title' => ['uk' => '<3', 'en' => $block, 'de' => '<p></p>']]);
+    }
+
     public function test_the_input_hooks_see_the_record_value(): void
     {
         $post = Post::create(['title' => ['uk' => 'Привіт', 'en' => 'Hello']]);

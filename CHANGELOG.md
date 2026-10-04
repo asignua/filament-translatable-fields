@@ -2,6 +2,11 @@
 
 All notable changes to `asignua/filament-translatable-fields` are documented here.
 
+## Unreleased
+
+- A record-bound `fill()` without data (a record Action's default mount, a custom page with `->record()`) hydrates the stored value as it is; it no longer turns a value that only looks blank as HTML (a body made of a custom block, the text `<3`) into `null`, which wiped it on save.
+- "Empty" badges and the "Copy from <default>" confirmation treat an element with `data-type` (custom block, merge tag) as content, and plain text such as `<3` or `a < b` is no longer judged by `strip_tags()`.
+
 ## v1.0.0 - 2026-10-03
 
 - `TranslatableTabs::make('title', fn (string $locale) => TextInput::make('title'))` and `Translatable::field(TextInput::make('title'))`: one tab per language around a field, one input per language bound to `title.{locale}`; the whole translation map is in the form state at once.

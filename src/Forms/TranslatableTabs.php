@@ -375,7 +375,9 @@ class TranslatableTabs extends Tabs
 
         foreach ($this->getLocales() as $locale) {
             $value = $record->getTranslation($this->field, $locale, false); // @phpstan-ignore method.notFound
-            $map[$locale] = Blank::is($value) ? null : $value;
+            // The stored value goes through as it is: only a missing language (`''`) becomes null. Judging it with
+            // Blank::is() here would turn a body made of a custom block into null and wipe it on save.
+            $map[$locale] = $value === '' ? null : $value;
         }
 
         data_set($livewire, $path, $map);
