@@ -2,7 +2,7 @@
 
 All notable changes to `asignua/filament-translatable-fields` are documented here.
 
-## Unreleased
+## v1.0.2 - 2026-10-08
 
 - `requiredAny()` now works for rich editors: an empty Tiptap document counts as an empty language (Laravel's `required_without_all` treated it as filled, so a post with every language of `body` empty saved without an error).
 - The tabs are built from the injected component instead of a captured `$this`, so inside a Repeater/Builder each item uses its own `Get`/`$record`/`locales()`/`requiredAny()` context, not the last item's.
