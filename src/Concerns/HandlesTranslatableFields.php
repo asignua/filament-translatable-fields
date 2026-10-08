@@ -6,9 +6,11 @@ namespace Asignua\FilamentTranslatableFields\Concerns;
 
 use Asignua\FilamentTranslatableFields\TranslatableFields;
 use Illuminate\Database\Eloquent\Model;
+use LogicException;
 
 /**
- * Optional helper for Create/Edit pages (and relation managers, and custom pages that write a model by hand).
+ * Optional helper for Create/Edit pages (and custom pages that write a model by hand; in a relation manager only the
+ * helper methods apply, see below).
  * Filament's default save already works with spatie — a cleared language arrives as `null` and spatie clears it —
  * so the trait is NOT needed for correctness. What it adds:
  *
@@ -17,6 +19,9 @@ use Illuminate\Database\Eloquent\Model;
  * - `mutateFormDataBeforeCreate/Save()` that store a cleared language as `''` rather than `null` (tidiness only).
  *   A page that defines its own `mutateFormDataBeforeSave()` replaces the trait's one: call
  *   `$this->normalizeTranslatableData($data, $this->translatableModel())` there if you want the same.
+ *
+ * In a RelationManager the page hooks above are never called (they belong to the actions): call
+ * `$this->normalizeTranslatableData($data, Related::class)` from the action's `->mutateDataUsing()`.
  */
 trait HandlesTranslatableFields
 {
@@ -89,12 +94,26 @@ trait HandlesTranslatableFields
 
     protected function translatableModel(): Model|string
     {
+        // A RelationManager and a ManageRelatedRecords page write the RELATED model; `getRecord()` of the latter is the
+        // owner, and a RelationManager has neither a record nor a resource.
+        if (method_exists($this, 'getRelationship')) {
+            $related = $this->getRelationship()->getRelated();
+
+            if ($related instanceof Model) {
+                return $related;
+            }
+        }
+
         if (method_exists($this, 'getRecord')) {
             $record = $this->getRecord();
 
             if ($record instanceof Model) {
                 return $record;
             }
+        }
+
+        if (!method_exists($this, 'getModel') && !method_exists(static::class, 'getResource')) {
+            throw new LogicException(static::class.' has no model of its own: pass it explicitly, normalizeTranslatableData($data, Related::class).');
         }
 
         /** @var class-string<Model> $model */

@@ -154,6 +154,9 @@ class EditPost extends EditRecord
   correctness). A locale key that is absent (a hidden or disabled input) is left untouched — spatie merges the
   languages it is given into the stored ones. A page that defines its own `mutateFormDataBeforeSave()` replaces the
   trait's: call `$this->normalizeTranslatableData($data, $this->translatableModel())` there if you want it.
+- In a relation manager the page hooks are never called (they belong to the actions): call
+  `$this->normalizeTranslatableData($data, Related::class)` from the action's `->mutateDataUsing()`.
+  `translatableModel()` itself returns the related model there (and on a `ManageRelatedRecords` page).
 
 For the same normalisation outside a page: `TranslatableFields::normalize($data, ['title', 'body'])`.
 

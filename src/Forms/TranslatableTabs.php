@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Asignua\FilamentTranslatableFields\Forms;
 
 use Asignua\FilamentTranslatableFields\Support\Blank;
+use Asignua\FilamentTranslatableFields\Support\RequiredInAnyLocale;
 use Asignua\FilamentTranslatableFields\TranslatableFields;
 use Closure;
 use Filament\Actions\Action;
@@ -87,7 +88,9 @@ class TranslatableTabs extends Tabs
         parent::setUp();
 
         $this->contained(false);
-        $this->tabs(fn (): array => $this->buildTabs());
+        // `static` + the injected component: a Repeater/Builder clones the schema per item but keeps closures as they are,
+        // so a `$this` captured here would build every item's tabs on the template instance (the last item's context).
+        $this->tabs(static fn (TranslatableTabs $component): array => $component->buildTabs());
     }
 
     /**
@@ -219,16 +222,35 @@ class TranslatableTabs extends Tabs
             if ($component instanceof Field) {
                 $others = array_map(static fn (string $other): string => "{$field}.{$other}", array_values(array_diff($locales, [$locale])));
 
-                $component->validationAttribute(static function (Field $c) use ($locale): string {
-                    $label = $c->getLabel();
+                // The factory's own `validationAttribute()` stays the base of the message; the label is the fallback.
+                $custom = self::rawProperty($component, 'validationAttribute');
 
-                    return ($label instanceof Htmlable ? strip_tags($label->toHtml()) : (string) $label).' ('.TranslatableFields::label($locale).')';
+                $component->validationAttribute(static function (Field $c) use ($locale, $custom): string {
+                    $base = $c->evaluate($custom);
+
+                    if (!is_string($base) || $base === '') {
+                        $label = $c->getLabel();
+                        $base = $label instanceof Htmlable ? strip_tags($label->toHtml()) : (string) $label;
+                    }
+
+                    return $base.' ('.TranslatableFields::label($locale).')';
                 });
 
                 if ($isRequired) {
                     $component->required();
                 } elseif ($requiredAny && $locale === $default) {
-                    $others === [] ? $component->required() : $component->requiredWithoutAll($others);
+                    if ($others === []) {
+                        $component->required();
+                    } else {
+                        // Not `requiredWithoutAll()`: it treats an empty rich-editor document as a filled language.
+                        // No `required(Closure)` either: it would render the HTML `required` attribute and block the
+                        // browser submit after another language is filled.
+                        $component
+                            ->markAsRequired()
+                            ->rule(static fn (Get $get): RequiredInAnyLocale => new RequiredInAnyLocale(
+                                array_map(static fn (string $other): mixed => $get($other), $others),
+                            ));
+                    }
                 }
 
                 if ($badges && !self::hasLiveSetting($component)) {
@@ -272,10 +294,18 @@ class TranslatableTabs extends Tabs
      */
     protected static function hasLiveSetting(Field $component): bool
     {
+        return self::rawProperty($component, 'isLive') !== null;
+    }
+
+    /**
+     * An unevaluated property of a Filament component, null when Filament no longer has it.
+     */
+    protected static function rawProperty(Field $component, string $property): mixed
+    {
         try {
-            return (new ReflectionProperty($component, 'isLive'))->getValue($component) !== null;
+            return (new ReflectionProperty($component, $property))->getValue($component);
         } catch (ReflectionException) {
-            return false;
+            return null;
         }
     }
 

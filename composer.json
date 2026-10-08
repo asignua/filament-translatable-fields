@@ -1,6 +1,6 @@
 {
     "name": "asignua/filament-translatable-fields",
-    "description": "Per-field language tabs for spatie/laravel-translatable in Filament 5. Every locale is a real input in the form state at the same time, so translations survive Repeater, Builder, ->relationship() repeaters, settings pages and custom pages without a model. No global locale switcher that loses repeater data, validation runs for every language, plus table columns and infolist entries that show the current or a chosen locale.",
+    "description": "Per-field language tabs for spatie/laravel-translatable in Filament 5. Every locale is a real input in the form state at the same time, so translations survive Repeater, Builder, ->relationship() repeaters, settings pages and custom pages without a model. No global locale switcher that loses repeater data, validation runs for every language, plus table columns and infolist entries that show the current language with a fallback to the default and any filled one.",
     "keywords": ["filament", "filament-plugin", "laravel", "translatable", "spatie", "multilingual", "i18n", "repeater"],
     "homepage": "https://github.com/asignua/filament-translatable-fields",
     "support": {

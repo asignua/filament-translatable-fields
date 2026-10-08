@@ -27,7 +27,11 @@ class TranslatableColumn extends TextColumn
     {
         parent::setUp();
 
-        $this->getStateUsing(fn (Model $record): ?string => TranslatedValue::for($record, $this->getName(), $this->evaluate($this->shouldMark)));
+        $this->getStateUsing(static fn (TranslatableColumn $component, Model|array|null $record): ?string => TranslatedValue::forState(
+            $record,
+            $component->getName(),
+            (bool) $component->evaluate($component->shouldMark),
+        ));
         $this->placeholder('—');
     }
 

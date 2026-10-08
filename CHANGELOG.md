@@ -2,6 +2,15 @@
 
 All notable changes to `asignua/filament-translatable-fields` are documented here.
 
+## Unreleased
+
+- `requiredAny()` now works for rich editors: an empty Tiptap document counts as an empty language (Laravel's `required_without_all` treated it as filled, so a post with every language of `body` empty saved without an error).
+- The tabs are built from the injected component instead of a captured `$this`, so inside a Repeater/Builder each item uses its own `Get`/`$record`/`locales()`/`requiredAny()` context, not the last item's.
+- `TranslatableEntry` / `TranslatableColumn` read the entry's own record or array state: a JSON `RepeatableEntry` item shows its own translation map (not the parent's attribute), and an infolist with `->state([...])` or a table with array records no longer throws a `TypeError`.
+- `HandlesTranslatableFields::translatableModel()` returns the related model in a RelationManager / `ManageRelatedRecords` page (it fataled / returned the owner), and throws a clear exception when no model can be found.
+- The factory's own `validationAttribute()` is kept as the base of the language-aware message (`заголовок (English)`).
+- `composer.json` description no longer promises a chosen-locale API that does not exist.
+
 ## v1.0.1 - 2026-10-05
 
 - A record-bound `fill()` without data (a record Action's default mount, a custom page with `->record()`) hydrates the stored value as it is; it no longer turns a value that only looks blank as HTML (a body made of a custom block, the text `<3`) into `null`, which wiped it on save.

@@ -51,8 +51,57 @@ final class TranslatedValue
 
     public static function for(Model $record, string $field, bool $mark = true, ?string $current = null): ?string
     {
-        $resolved = self::resolve($record, $field, $current);
+        return self::format(self::resolve($record, $field, $current), $mark, $current);
+    }
 
+    /**
+     * The same, for a translation map that is not an Eloquent attribute: a JSON item of a repeatable entry, an array
+     * record of a table, an infolist with its own state. A plain string (an untranslated value) is shown as it is.
+     */
+    public static function fromMap(mixed $map, bool $mark = true, ?string $current = null): ?string
+    {
+        if (is_scalar($map) || $map instanceof Stringable) {
+            $value = trim((string) $map);
+
+            return $value === '' ? null : $value;
+        }
+
+        if (!is_array($map)) {
+            return null;
+        }
+
+        foreach (TranslatableFields::fallbackOrder($current) as $locale) {
+            $value = $map[$locale] ?? null;
+
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return self::format(['locale' => $locale, 'value' => trim((string) $value)], $mark, $current);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Whatever a column or an entry was given as its record: a model, an array row or nothing at all.
+     */
+    public static function forState(mixed $state, string $field, bool $mark = true, ?string $current = null): ?string
+    {
+        if ($state instanceof Model) {
+            return self::for($state, $field, $mark, $current);
+        }
+
+        if (is_array($state) || is_object($state)) {
+            return self::fromMap(data_get($state, $field), $mark, $current);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{locale: string, value: string}|null $resolved
+     */
+    private static function format(?array $resolved, bool $mark, ?string $current): ?string
+    {
         if ($resolved === null) {
             return null;
         }

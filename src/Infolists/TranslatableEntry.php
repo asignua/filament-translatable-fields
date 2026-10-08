@@ -7,7 +7,6 @@ namespace Asignua\FilamentTranslatableFields\Infolists;
 use Asignua\FilamentTranslatableFields\Support\TranslatedValue;
 use Closure;
 use Filament\Infolists\Components\TextEntry;
-use Illuminate\Database\Eloquent\Model;
 
 /**
  * Infolist twin of {@see \Asignua\FilamentTranslatableFields\Tables\TranslatableColumn}.
@@ -20,7 +19,17 @@ class TranslatableEntry extends TextEntry
     {
         parent::setUp();
 
-        $this->getStateUsing(fn (Model $record): ?string => TranslatedValue::for($record, $this->getName(), $this->evaluate($this->shouldMark)));
+        // Not the injected `$record`: inside a JSON RepeatableEntry item it is the PARENT record. The entry's own
+        // container knows its record, or else the item's array as constant state; `static` for the Repeater's clones.
+        $this->getStateUsing(static function (TranslatableEntry $component): ?string {
+            $container = $component->getContainer();
+
+            return TranslatedValue::forState(
+                $container->getRecord(withParentComponentRecord: false) ?? $container->getConstantState(),
+                $component->getName(),
+                (bool) $component->evaluate($component->shouldMark),
+            );
+        });
         $this->placeholder('—');
     }
 
