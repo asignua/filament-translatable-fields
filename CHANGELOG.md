@@ -2,6 +2,11 @@
 
 All notable changes to `asignua/filament-translatable-fields` are documented here.
 
+## v1.0.3 - 2026-10-25
+
+- Screenshots and the cover carry the «made in asign» mark; README shows the Stand With Ukraine badge.
+- Dependency updates (CI actions, dev tooling).
+
 ## v1.0.2 - 2026-10-08
 
 - `requiredAny()` now works for rich editors: an empty Tiptap document counts as an empty language (Laravel's `required_without_all` treated it as filled, so a post with every language of `body` empty saved without an error).
