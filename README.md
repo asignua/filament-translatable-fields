@@ -238,6 +238,15 @@ translatable columns, a JSON Repeater, a Builder, a relationship Repeater) and a
 
 See [CHANGELOG.md](https://github.com/asignua/filament-translatable-fields/blob/main/CHANGELOG.md).
 
+## More plugins by asign
+
+- [Translation Manager](https://filamentphp.com/plugins/asign-translation-manager) — edit and scan Laravel translations in the panel
+- [SEO Files](https://filamentphp.com/plugins/asign-seo-files) — sitemap, robots.txt and llms.txt
+- [Themes](https://filamentphp.com/plugins/asign-themes) — per-user and per-panel colour themes
+- [Redirects](https://filamentphp.com/plugins/asign-redirects) — managed redirects and a 404 log
+
+All plugins: <https://filamentphp.com/plugins?q=asign>
+
 ## License
 
 The MIT License (MIT). See [LICENSE.md](https://github.com/asignua/filament-translatable-fields/blob/main/LICENSE.md).
